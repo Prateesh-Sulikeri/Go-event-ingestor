@@ -444,8 +444,6 @@ const simulatedData = {
     bucket_size: 100,
     refill_rate: 10,
     clients: {
-        'client-001': { allowed: 0, blocked: 0 },
-        'client-002': { allowed: 0, blocked: 0 },
         'dashboard': { allowed: 0, blocked: 0 }
     }
 };
@@ -581,7 +579,7 @@ document.getElementById("startBtn").onclick = () => {
         simulatedData.current_tokens = Math.max(0, Math.min(100, simulatedData.current_tokens - rps/2 + 10));
         
         // Update client stats
-        const clients = ['client-001', 'client-002', 'dashboard'];
+        const clients = ['dashboard'];
         clients.forEach(client => {
             simulatedData.clients[client].allowed += Math.floor(allowedIncrement / 3);
             simulatedData.clients[client].blocked += Math.floor(blockedIncrement / 3);
