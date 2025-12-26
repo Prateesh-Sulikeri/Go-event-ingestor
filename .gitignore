@@ -1,0 +1,20 @@
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=1105
+DB_NAME=event_ingestor
+
+# Redis
+REDIS_ADDR=localhost:6379
+
+# JWT
+JWT_SECRET=6cd778df36f13203986fbe99a15fe1637ae6ebe1a12648b4b603e39118185365
+JWT_ISSUER=event-ingestor
+JWT_EXP_HOURS=1
+
+# Rate limiter
+RATE_LIMIT_BUCKET_SIZE=100
+RATE_LIMIT_REFILL_RATE=10
+
+.env
