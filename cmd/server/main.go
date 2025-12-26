@@ -57,16 +57,30 @@ func main() {
 		val, _ := c.Get("client_id")
 		return val.(string)
 	}))
-
+	
 	// Rate-limited, authenticated routes
 	apiGroup.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"msg": "pong"})
 	})
-
 	apiGroup.POST("/events", eventHandler.Ingest)
-
-	// Start service
+	
+	// Update rate limiter configuration (bucket + refill)
+	apiGroup.POST("/config/limiter", func(c *gin.Context) {
+		var req struct {
+			Bucket int `json:"bucket"`
+			Refill int `json:"refill"`
+		}
+		if err := c.BindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "invalid payload"})
+			return
+		}
+		lim.Update(req.Bucket, req.Refill)
+		c.JSON(200, gin.H{"status": "limiter updated"})
+	})
+	
+	// Start service LAST
 	addr := ":8080"
 	fmt.Println("Server running on", addr)
 	log.Fatal(r.Run(addr))
+	
 }

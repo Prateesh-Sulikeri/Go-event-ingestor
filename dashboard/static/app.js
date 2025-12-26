@@ -33,8 +33,12 @@ async function updateChart() {
           borderColor: "#2563eb",
           backgroundColor: "rgba(37, 99, 235, 0.25)",
           borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 3
+          tension: 0.45,        // smoother oscillation
+          pointRadius: 4,
+          fill: true,
+          backgroundColor: "rgba(37, 99, 235, 0.12)",
+          borderWidth: 3
+
         }]
       },
       options: {
@@ -59,6 +63,22 @@ async function updateChart() {
   }
 }
 
+async function updateRateLimiter() {
+  const bucket = document.getElementById("bucket_size").value;
+  const refill = document.getElementById("refill_rate").value;
+
+  const r = await fetch("/v1/config/limiter", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ bucket, refill })
+  });
+
+  const msg = await r.json();
+  document.getElementById("status").innerHTML =
+    `Limiter Updated → Bucket: <b>${bucket}</b>, Refill: <b>${refill}/sec</b>`;
+}
+
+
 
 // ------------------------------
 // Controller Actions
@@ -68,7 +88,7 @@ async function customSteady() {
   const rps = document.getElementById("steady_rps").value;
   const res = await fetch("/action/run", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "steady", rps })
   });
   const msg = await res.json();
@@ -79,7 +99,7 @@ async function customBurst() {
   const count = document.getElementById("burst_count").value;
   const res = await fetch("/action/run", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "burst", count })
   });
   document.getElementById("status").textContent = (await res.json()).status;
@@ -90,7 +110,7 @@ async function customWave() {
   const max = document.getElementById("wave_max").value;
   const res = await fetch("/action/run", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "wave", min, max })
   });
   document.getElementById("status").textContent = (await res.json()).status;
@@ -99,10 +119,11 @@ async function customWave() {
 async function triggerStop() {
   const r = await fetch("/action/run", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "stop" })
   });
-  document.getElementById("status").textContent = (await r.json()).status;
+  const msg = await r.json();
+  document.getElementById("status").innerHTML = `<b style="color:#c62828">⛔ Traffic stopped</b>`;
 }
 
 async function clearDB() {
