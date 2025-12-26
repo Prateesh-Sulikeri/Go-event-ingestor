@@ -1,12 +1,11 @@
 #!/bin/bash
-
+DIR=$(dirname "$0")
 RPS=${1:-5}
 
-echo "Sending $RPS requests per second... CTRL+C to stop."
-
+echo "Steady Load: $RPS requests per second"
 while true; do
-  for ((i=1; i<=$RPS; i++)); do
-    ./send_event.sh &
+  for _ in $(seq 1 "$RPS"); do
+    bash "$DIR/send_event.sh" &
   done
   wait
   sleep 1
