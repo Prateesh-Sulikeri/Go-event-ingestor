@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/Prateesh-Sulikeri/Go-event-ingestor/internal/api"
 	"github.com/Prateesh-Sulikeri/Go-event-ingestor/internal/auth"
 	"github.com/Prateesh-Sulikeri/Go-event-ingestor/internal/config"
 	"github.com/Prateesh-Sulikeri/Go-event-ingestor/internal/limiter"
+	"github.com/Prateesh-Sulikeri/Go-event-ingestor/internal/metrics"
 	"github.com/Prateesh-Sulikeri/Go-event-ingestor/internal/storage"
 
 	"github.com/gin-gonic/gin"
@@ -18,69 +18,80 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// Initialize Redis
+	// Core services
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.REDIS_ADDR})
 	lim := limiter.NewLimiter(rdb, cfg.RATE_LIMIT_BUCKET_SIZE, cfg.RATE_LIMIT_REFILL_RATE)
+	m := metrics.NewMetrics()
+	jwt := auth.NewJWTService(cfg)
 
-	// Initialize JWT
-	jwtService := auth.NewJWTService(cfg)
-
-	// Initialize DB store
 	store, err := storage.NewEventStore(cfg)
 	if err != nil {
-		log.Fatal("db connect failed:", err)
+		log.Fatal("DB connect failed:", err)
 	}
 	eventHandler := api.NewEventHandler(store)
 
-	// Gin setup
+	// Gin router
 	r := gin.Default()
 
-	// Public route: token generation
+	// Auth
 	r.POST("/auth/login", func(c *gin.Context) {
 		var body struct{ ClientID string `json:"client_id"` }
 		if err := c.BindJSON(&body); err != nil || body.ClientID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "client_id required"})
+			c.JSON(400, gin.H{"error": "client_id required"})
 			return
 		}
-		token, err := jwtService.GenerateToken(body.ClientID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create token"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"token": token})
+		token, _ := jwt.GenerateToken(body.ClientID)
+		c.JSON(200, gin.H{"token": token})
 	})
 
-	// Protected API group
-	apiGroup := r.Group("/v1")
-	apiGroup.Use(jwtService.Middleware())
-	apiGroup.Use(lim.Middleware(func(c *gin.Context) string {
-		val, _ := c.Get("client_id")
-		return val.(string)
+	// WebSocket for live metrics
+	wsHandler := api.NewWebSocketHandler(m, lim, rdb)
+	r.GET("/v1/ws", wsHandler.Handle)
+
+	// Protected routes (ORDER MATTERS)
+	v1 := r.Group("/v1")
+	v1.Use(jwt.Middleware())
+
+	// Metrics then limiter
+	v1.Use(m.Middleware(func(c *gin.Context) string {
+		id, _ := c.Get("client_id")
+		return id.(string)
 	}))
-	
-	// Rate-limited, authenticated routes
-	apiGroup.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"msg": "pong"})
+	v1.Use(lim.Middleware(func(c *gin.Context) string {
+		id, _ := c.Get("client_id")
+		return id.(string)
+	}, m))
+
+	v1.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{"msg": "pong"})
 	})
-	apiGroup.POST("/events", eventHandler.Ingest)
-	
-	// Update rate limiter configuration (bucket + refill)
-	apiGroup.POST("/config/limiter", func(c *gin.Context) {
-		var req struct {
+
+	v1.POST("/events", eventHandler.Ingest)
+
+	// Dynamic limiter config
+	v1.POST("/config/limiter", func(c *gin.Context) {
+		var b struct {
 			Bucket int `json:"bucket"`
 			Refill int `json:"refill"`
 		}
-		if err := c.BindJSON(&req); err != nil {
+		if err := c.BindJSON(&b); err != nil {
 			c.JSON(400, gin.H{"error": "invalid payload"})
 			return
 		}
-		lim.Update(req.Bucket, req.Refill)
-		c.JSON(200, gin.H{"status": "limiter updated"})
+		lim.Update(b.Bucket, b.Refill)
+		m.BucketSize = b.Bucket
+		m.RefillRate = b.Refill
+		c.JSON(200, gin.H{"status": "updated"})
 	})
-	
-	// Start service LAST
-	addr := ":8080"
-	fmt.Println("Server running on", addr)
-	log.Fatal(r.Run(addr))
-	
+
+	// Dashboard UI
+	r.Static("/static", "./dashboard/static")
+	r.LoadHTMLFiles("dashboard/index.html")
+
+	r.GET("/dashboard", func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
+	})
+
+	fmt.Println("Server running on :8080")
+	log.Fatal(r.Run(":8080"))
 }

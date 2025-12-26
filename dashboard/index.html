@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Ingestor Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* ===== ROOT THEME ===== */
+:root {
+  --bg: #0b0c10;
+  --surface: #111317;
+  --surface2: #1b1e25;
+  --text: #e9e9e9;
+  --text-sub: #97989c;
+  --accent: #3a8dff;
+  --accent2: #00d9a5;
+  --danger: #ff4d4d;
+  --border: rgba(255,255,255,0.08);
+  --radius: 12px;
+  --shadow: 0 6px 20px rgba(0,0,0,.35);
+  font-family: "Inter",sans-serif;
+}
+
+/* ===== GLOBAL ===== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  margin: 0;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main { 
+  overflow-y: auto; 
+  padding: 32px;
+  flex: 1;
+}
+
+/* ===== HEADER ===== */
+.app-bar {
+  background: var(--surface2);
+  padding: 20px 32px;
+  font-size: 24px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ===== GRID LAYOUT ===== */
+.row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.row.split > .left, 
+.row.split > .right { 
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card {
+  background: var(--surface);
+  padding: 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+/* ===== CONTROLS LEFT ===== */
+.controls-pane {
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+  overflow: hidden;
+}
+
+.controls-pane label { 
+  margin-top: 12px; 
+  margin-bottom: 6px;
+  font-size: 14px; 
+  color: var(--text-sub); 
+  display: block;
+}
+
+.controls-pane > h2 {
+  margin-bottom: 16px;
+}
+
+.controls-pane input, 
+.controls-pane select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  width: 100%;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.traffic-buttons { 
+  display: flex; 
+  gap: 10px; 
+  margin-top: 18px; 
+}
+
+#startBtn, #stopBtn {
+  padding: 12px; 
+  border: none; 
+  border-radius: 8px; 
+  font-weight: 600; 
+  cursor: pointer;
+  flex: 1;
+}
+
+#startBtn { 
+  background: var(--accent2); 
+  color: #000; 
+}
+
+#stopBtn { 
+  background: var(--danger); 
+  color: var(--text);
+}
+
+/* ===== STATUS ===== */
+#trafficState {
+  margin-left: 6px; 
+  padding: 4px 10px;
+  border-radius: var(--radius); 
+  font-weight: 500;
+}
+
+#trafficState.running { 
+  background: rgba(0,255,120,.2); 
+  color: var(--accent2); 
+}
+
+#trafficState.stopped { 
+  background: rgba(255,77,77,.2); 
+  color: var(--danger); 
+}
+
+/* ===== RIGHT COLUMN ===== */
+.right {
+  display: flex;
+  flex-direction: column;
+}
+
+.graph { 
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+  position: relative;
+}
+
+.graph canvas {
+  position: absolute !important;
+  top: 40px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100% !important;
+  height: calc(100% - 40px) !important;
+}
+
+.bucket { 
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+/* TOKEN BUCKET BAR */
+.bucket-bar {
+  width: 100%; 
+  height: 26px; 
+  border-radius: 10px;
+  background: var(--surface2);
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+#bucket-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 10px;
+  transition: width .35s ease;
+  min-width: 2%;
+}
+
+.bucket .sub {
+  color: var(--text-sub);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* ===== METRICS TABLES ===== */
+.metric { 
+  padding: 10px 0; 
+  border-bottom: 1px solid var(--border); 
+  display: flex; 
+  justify-content: space-between; 
+}
+
+.metric:last-child {
+  border-bottom: none;
+}
+
+.client-table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  margin-top: 12px;
+}
+
+.client-table td, 
+.client-table th { 
+  padding: 12px; 
+  border-bottom: 1px solid var(--border); 
+  text-align: left;
+}
+
+.client-table th { 
+  color: var(--accent); 
+  font-weight: 600;
+}
+
+.client-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===== IDEAL EXAMPLES ===== */
+.ideal-section { 
+  padding: 40px; 
+}
+
+.example-grid { 
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.example {
+  text-align: center;
+}
+
+.example h3 {
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+.example canvas {
+  width: 100% !important; 
+  height: 180px !important; 
+  background: var(--surface2);
+  border-radius: 10px; 
+  margin-bottom: 12px;
+}
+
+.example p {
+  color: var(--text-sub);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ===== EXPLANATION HERO ===== */
+.hero-explain {
+  background: var(--surface2);
+  padding: 32px;
+  border-radius: var(--radius);
+  margin-bottom: 40px;
+  border: 1px solid var(--border);
+}
+
+.hero-explain h2 { 
+  margin-top: 0;
+  margin-bottom: 12px; 
+  color: var(--accent);
+}
+
+.hero-explain h3 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: var(--accent2);
+}
+
+.hero-explain ul { 
+  margin-top: 10px; 
+  line-height: 1.8;
+  padding-left: 24px;
+}
+
+.hero-explain ul li {
+  margin-bottom: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<header class="app-bar">
+    <h1>Event Ingestor Dashboard</h1>
+</header>
+
+<main>
+
+<!-- ===== EXPLANATION SECTION ===== -->
+<section class="hero-explain">
+    <h2>What This System Demonstrates</h2>
+    <p>
+        This project showcases a <strong>real-time rate-limited event ingestion system</strong>.
+        It uses a <strong>Token Bucket Algorithm</strong> stored in Redis to control request flow
+        and prevent system overload. Every client request earns or loses tokens depending
+        on consumption and refill speed. Once tokens deplete, requests are blocked.
+    </p>
+
+    <h3>Why Token Bucket?</h3>
+    <ul>
+        <li>Prevents abuse by high-traffic clients</li>
+        <li>Ensures fair resource allocation across sources</li>
+        <li>Allows controlled bursts while maintaining sustainable throughput</li>
+        <li>Easy real-time tuning without server restarts</li>
+    </ul>
+
+    <h3>What You See On This Dashboard</h3>
+    <ul>
+        <li><strong>Traffic Controls:</strong> Send test traffic (steady, burst, wave)</li>
+        <li><strong>Live Graph:</strong> Allowed vs Blocked requests over time</li>
+        <li><strong>Token Bucket Visual:</strong> Remaining tokens & refill rate</li>
+        <li><strong>Per-Client Metrics:</strong> Allowed vs Blocked events per user</li>
+    </ul>
+</section>
+
+
+<!-- ===== FIRST ROW 50/50 ===== -->
+<div class="row split">
+
+    <!-- LEFT: TRAFFIC CONTROLS -->
+    <div class="left controls-pane card">
+        <h2 style="margin-top: 0;">Traffic Controls</h2>
+
+        <label>Mode</label>
+        <select id="pattern">
+            <option value="steady">Steady</option>
+            <option value="burst">Burst</option>
+            <option value="wave">Wave</option>
+        </select>
+
+        <label>Requests Per Second</label>
+        <input type="number" id="rpsInput" value="20" min="1" max="500">
+
+        <div class="traffic-buttons">
+            <button id="startBtn">Start</button>
+            <button id="stopBtn" class="stop">Stop</button>
+        </div>
+
+        <p>Status: <span id="trafficState" class="stopped">Idle</span></p>
+
+        <div class="card bucket">
+            <h3 style="margin-top: 0;">Token Bucket</h3>
+            <div class="bucket-bar"><div id="bucket-fill"></div></div>
+            <p><strong id="bucketTokens">0</strong> / <span id="bucketCap">0</span> tokens</p>
+            <p class="sub">Refilling @ <span id="bucketRef">0</span>/sec</p>
+        </div>
+
+    </div>
+
+    <!-- RIGHT: GRAPH -->
+    <div class="right card graph">
+        <h3 style="margin-top: 0;">Allowed vs Blocked Traffic</h3>
+        <canvas id="lineChart"></canvas>
+    </div>
+</div>
+
+
+<!-- ===== SECOND ROW ===== -->
+<div class="row split">
+    <div class="left card">
+        <h3 style="margin-top: 0;">Key Metrics</h3>
+        <div class="metric"><span>Allowed:</span><strong id="allowed">0</strong></div>
+        <div class="metric"><span>Blocked:</span><strong id="blocked">0</strong></div>
+        <div class="metric"><span>Latency:</span><strong id="latency">0ms</strong></div>
+    </div>
+
+    <div class="right card">
+        <h3 style="margin-top: 0;">Per-Client Stats</h3>
+        <table class="client-table">
+            <thead><tr><th>Client</th><th>Allowed</th><th>Blocked</th></tr></thead>
+            <tbody id="clientTable">
+                <tr><td colspan="3" style="text-align: center; color: var(--text-sub);">No data yet</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<!-- ===== IDEAL BEHAVIOUR CHARTS ===== -->
+<section class="ideal-section card">
+    <h2 style="margin-top: 0;">Ideal Traffic Patterns</h2>
+    <p>These graphs represent what you should expect to see under each mode.</p>
+
+    <div class="example-grid">
+
+        <div class="example">
+            <h3>Steady</h3>
+            <canvas id="steadyExample"></canvas>
+            <p>Sustained throughput with consistent token usage.</p>
+        </div>
+
+        <div class="example">
+            <h3>Burst</h3>
+            <canvas id="burstExample"></canvas>
+            <p>Sharp spikes consuming tokens, producing blocks after depletion.</p>
+        </div>
+
+        <div class="example">
+            <h3>Wave</h3>
+            <canvas id="waveExample"></canvas>
+            <p>Oscillating traffic demonstrating refill + exhaustion cycles.</p>
+        </div>
+
+    </div>
+</section>
+
+</main>
+
+<script>
+// ========== WEBSOCKET (SIMULATED) ==========
+// const ws = new WebSocket("ws://localhost:8080/v1/ws");
+
+// Simulated WebSocket for demo purposes
+const simulatedData = {
+    allowed_total: 0,
+    blocked_total: 0,
+    avg_latency_ms: 0,
+    current_tokens: 50,
+    bucket_size: 100,
+    refill_rate: 10,
+    clients: {
+        'dashboard': { allowed: 0, blocked: 0 }
+    }
+};
+
+function simulateWebSocketUpdate() {
+    // This would normally be: ws.onmessage = e => { const m = JSON.parse(e.data); ... }
+    updateBucket(simulatedData);
+    updateClients(simulatedData.clients);
+}
+
+// Initialize with simulated data
+setTimeout(simulateWebSocketUpdate, 100);
+
+// ========== TOKEN BUCKET ==========
+function updateBucket(m){
+    const fill = Math.max(0, Math.min(100, (m.current_tokens/m.bucket_size)*100));
+    document.getElementById("bucket-fill").style.width = fill+"%";
+    document.getElementById("bucketTokens").innerText = m.current_tokens;
+    document.getElementById("bucketCap").innerText = m.bucket_size;
+    document.getElementById("bucketRef").innerText = m.refill_rate;
+}
+
+// ========== CLIENT TABLE ==========
+function updateClients(d){
+    let tbody = document.getElementById("clientTable");
+    if (Object.keys(d).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-sub);">No data yet</td></tr>';
+        return;
+    }
+    tbody.innerHTML="";
+    Object.entries(d).forEach(([id,s])=>{
+        tbody.innerHTML+=`
+        <tr>
+            <td>${id}</td>
+            <td>${s.allowed}</td>
+            <td>${s.blocked}</td>
+        </tr>`;
+    });
+}
+
+// ========== LINE CHART ==========
+const ctx = document.getElementById("lineChart");
+const lineChart = new Chart(ctx,{
+    type:'line',
+    data:{ 
+        labels:[], 
+        datasets:[
+            {
+                label:"Allowed",
+                borderColor:"#3a8dff",
+                backgroundColor:"rgba(58, 141, 255, 0.1)",
+                data:[],
+                tension:0.4,
+                fill: true
+            },
+            {
+                label:"Blocked",
+                borderColor:"#ff4d4d",
+                backgroundColor:"rgba(255, 77, 77, 0.1)",
+                data:[],
+                tension:0.4,
+                fill: true
+            }
+        ]
+    },
+    options:{
+        responsive:true,
+        maintainAspectRatio: false,
+        animation:false,
+        plugins: {
+            legend: {
+                labels: {
+                    color: '#e9e9e9'
+                }
+            }
+        },
+        scales:{
+            x:{
+                display:false
+            },
+            y: {
+                ticks: {
+                    color: '#97989c'
+                },
+                grid: {
+                    color: 'rgba(255,255,255,0.05)'
+                }
+            }
+        }
+    }
+});
+
+function updateChart(m){
+    lineChart.data.labels.push(Date.now());
+    lineChart.data.datasets[0].data.push(m.allowed_total);
+    lineChart.data.datasets[1].data.push(m.blocked_total);
+
+    if(lineChart.data.labels.length>300){
+        lineChart.data.labels.shift();
+        lineChart.data.datasets.forEach(d=>d.data.shift());
+    }
+    lineChart.update();
+}
+
+// ========= Traffic Controls ==========
+let trafficInterval = null;
+
+function setStatus(running, pattern="", rps=""){
+    const el = document.getElementById("trafficState");
+    if(running){
+        el.className = "running";
+        el.textContent = `${pattern} @ ${rps} rps`;
+    } else {
+        el.className = "stopped";
+        el.textContent = "Stopped";
+    }
+}
+
+document.getElementById("startBtn").onclick = () => {
+    const rps = parseInt(document.getElementById("rpsInput").value);
+    const pattern = document.getElementById("pattern").value;
+    clearInterval(trafficInterval);
+    setStatus(true, pattern, rps);
+    
+    // Simulate traffic for demo
+    trafficInterval = setInterval(() => {
+        const allowedIncrement = Math.floor(Math.random() * rps);
+        const blockedIncrement = Math.floor(Math.random() * (rps / 4));
+        
+        simulatedData.allowed_total += allowedIncrement;
+        simulatedData.blocked_total += blockedIncrement;
+        simulatedData.avg_latency_ms = Math.random() * 50;
+        simulatedData.current_tokens = Math.max(0, Math.min(100, simulatedData.current_tokens - rps/2 + 10));
+        
+        // Update client stats
+        const clients = ['client-001', 'client-002', 'dashboard'];
+        clients.forEach(client => {
+            simulatedData.clients[client].allowed += Math.floor(allowedIncrement / 3);
+            simulatedData.clients[client].blocked += Math.floor(blockedIncrement / 3);
+        });
+        
+        document.getElementById("allowed").innerText = simulatedData.allowed_total;
+        document.getElementById("blocked").innerText = simulatedData.blocked_total;
+        document.getElementById("latency").innerText = simulatedData.avg_latency_ms.toFixed(1)+"ms";
+        
+        updateBucket(simulatedData);
+        updateClients(simulatedData.clients);
+        updateChart(simulatedData);
+    }, 1000);
+};
+
+document.getElementById("stopBtn").onclick = () => {
+    clearInterval(trafficInterval);
+    setStatus(false);
+};
+
+/* ============================
+   🧪 IDEAL EXAMPLE GRAPHS
+============================ */
+function createExampleChart(id, data, color){
+    const canvas = document.getElementById(id);
+    new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: data.map((_, i) => i), 
+            datasets: [{
+                data: data,
+                borderColor: color,
+                backgroundColor: color + '20',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false, 
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { display: false },
+                y: { display: false }
+            }
+        }
+    });
+}
+
+window.addEventListener('load', () => {
+    // Steady pattern - consistent throughput
+    const steadyData = Array(40).fill(12);
+    createExampleChart("steadyExample", steadyData, "#3a8dff");
+    
+    // Burst pattern - sharp spikes
+    const burstData = [0,0,0,60,0,0,0,80,0,0,0,50,0,0,0,0,70,0,0,0,90,0,0,0];
+    createExampleChart("burstExample", burstData, "#ff4d4d");
+    
+    // Wave pattern - oscillating
+    const waveData = Array.from({length: 60}, (_, i) => 20 + 15 * Math.sin(i / 4));
+    createExampleChart("waveExample", waveData, "#9b59b6");
+});
+</script>
+</body>
+</html>
